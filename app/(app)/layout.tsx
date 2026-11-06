@@ -215,7 +215,7 @@ export default async function AppLayout({
         </main>
       </div>
       {/* The agents dock keeps the page's foot clear of its floor line itself, as tall as what stands on it, and draws nothing (no spacer either) where it doesn't help. */}
-      <AgentsDock agents={dockAgents} defaultProjectSlug={defaultProjectSlug} version={appVersionLabel()} earn={earnSample !== null} memberCount={memberCount} />
+      <AgentsDock agents={dockAgents} earn={earnSample !== null} memberCount={memberCount} />
       <FocusMainOnNavigate />
       {welcomeNotice ? <EarnWelcomeToast /> : paidTasks.length > 0 ? <EarnPaidCelebration paid={paidTasks} agentName={earnAgentName} /> : null}
       <KeyboardShortcuts

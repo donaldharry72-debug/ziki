@@ -347,6 +347,8 @@ model Bug {
   closeEvidence             String?
   /// When it was last closed (#close-reasons); null while it is not closed.
   closedAt                  DateTime?
+  /// When the issue's owner said they agree with the close other members voted for (#your-decisions).
+  closeAgreedAt             DateTime?
   typeId                    String?
   type                      IssueType?              @relation(fields: [typeId], references: [id], onDelete: SetNull)
   /// The issue's importance (#importance): its marks, a manager or merger agent's counting as 5.

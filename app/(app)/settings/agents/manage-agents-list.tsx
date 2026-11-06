@@ -9,13 +9,14 @@ import { AgentPortrait } from "@/components/agent-portrait";
 import { colorFor, faceColorKeyFor, lookFor, useDockPrefs } from "@/components/agents-dock-prefs";
 import { LocalTime } from "@/components/local-time";
 import { RelativeTime } from "@/components/relative-time";
-import { AgentControls } from "./agent-controls";
+import { AgentDeleteButton } from "./agent-controls";
+import { ConnectAgentModalButton } from "./connect/connect-agent-modal";
 import { AgentRowKey } from "./agent-row-key";
-import type { AgentProjectChoice } from "./create-agent-form";
 import {
   agentsMutedClass,
+  agentsPrimaryBtn,
+  agentsSecondaryBtn,
   agentsSurface,
-  levelBadgeClass,
 } from "./agents-ui";
 
 export type ManageAgentItem = {
@@ -30,8 +31,9 @@ export type ManageAgentItem = {
   personal: boolean;
   /** The owner's avatar pick; null wears the automatic robot. */
   avatar: string | null;
-  currentProjectId: string | null;
   recent: boolean;
+  /** The project a key made by Connect agent works in. */
+  keyProject: { id: string; name: string } | null;
   apiKeys: {
     id: string;
     prefix: string;
@@ -46,14 +48,10 @@ export function ManageAgentsList({
   agents,
   activeCount,
   maxActive,
-  levels,
-  projects,
 }: {
   agents: ManageAgentItem[];
   activeCount: number;
   maxActive: number;
-  levels: AgentLevel[];
-  projects: AgentProjectChoice[];
 }) {
   const [query, setQuery] = useState("");
   const dockPrefs = useDockPrefs();
@@ -149,7 +147,6 @@ export function ManageAgentsList({
                         {agent.name}
                         {agent.personal ? <span className="font-normal text-zk-muted"> · personal</span> : null}
                       </Link>
-                      <span className={levelBadgeClass(agent.level)}>{AGENT_LEVEL_LABELS[agent.level]}</span>
                       {agent.revokedAt ? (
                         <span className="inline-flex items-center rounded-full bg-zk-bad-bg px-2.5 py-0.5 text-xs font-bold text-zk-bad-fg">
                           Revoked
@@ -182,8 +179,8 @@ export function ManageAgentsList({
                     </p>
                   </div>
                 </div>
-                {/* Above the stretched link; with its More menu open, above the rows below too, so the menu is never under them. */}
-                <div className="relative z-10 flex flex-wrap items-center gap-2 has-[[role=menu]]:z-40 sm:justify-end">
+                {/* Above the stretched link. */}
+                <div className="relative z-10 flex flex-wrap items-center gap-2 sm:justify-end">
                   {!agent.revokedAt
                     ? agent.apiKeys.map((key) => (
                         <AgentRowKey
@@ -195,25 +192,17 @@ export function ManageAgentsList({
                         />
                       ))
                     : null}
+                  {/* Two buttons: Copy key (above, one per live key) and Connect agent. A new key and Delete are in its settings. */}
                   {agent.revokedAt ? (
-                    <AgentControls
-                      revoked
-                      personal={agent.personal}
-                      agentId={agent.id}
-                      agentName={agent.name}
-                      level={agent.level}
-                      levels={levels}
-                      projects={projects}
-                    />
+                    <AgentDeleteButton agentId={agent.id} agentName={agent.name} personal={agent.personal} />
                   ) : (
-                    <AgentControls
-                      personal={agent.personal}
+                    <ConnectAgentModalButton
                       agentId={agent.id}
                       agentName={agent.name}
-                      level={agent.level}
-                      levels={levels}
-                      projects={projects}
-                      currentProjectId={agent.currentProjectId}
+                      apiKey={agent.apiKeys.find((key) => key.apiKey)?.apiKey ?? null}
+                      projectId={agent.keyProject?.id ?? null}
+                      projectName={agent.keyProject?.name ?? null}
+                      className={agent.apiKeys.some((key) => key.apiKey) ? agentsSecondaryBtn : agentsPrimaryBtn}
                     />
                   )}
                 </div>
