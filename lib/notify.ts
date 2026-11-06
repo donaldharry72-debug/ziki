@@ -199,7 +199,7 @@ export async function deliverNotifications(event: NotificationEvent): Promise<vo
  * mail server never delays or breaks the action that triggered them.
  */
 export function notifyLater(...events: NotificationEvent[]): void {
-  after(async () => {
+  const deliver = async () => {
     for (const event of events) {
       try {
         await deliverNotifications(event);
@@ -207,5 +207,13 @@ export function notifyLater(...events: NotificationEvent[]): void {
         logger.error("[notify] delivery failed", error);
       }
     }
-  });
+  };
+
+  try {
+    after(deliver);
+  } catch {
+    // Scheduled platform sweeps run outside a request scope, where `after`
+    // is unavailable. Deliver without making a notification failure abort the sweep.
+    void deliver();
+  }
 }

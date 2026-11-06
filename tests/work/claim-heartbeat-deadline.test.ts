@@ -8,9 +8,10 @@ const db = vi.hoisted(() => ({
   webhookDelivery: { createMany: vi.fn() },
   project: { findFirst: vi.fn(), findUnique: vi.fn() },
   issueClaim: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn(), count: vi.fn(), create: vi.fn(), groupBy: vi.fn() },
+  issueWatch: { findMany: vi.fn() }, notification: { createMany: vi.fn() }, user: { findMany: vi.fn() },
   membership: { findMany: vi.fn() },
   agentQuestion: { findFirst: vi.fn(), updateMany: vi.fn() },
-  bug: { updateMany: vi.fn(), findFirst: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn(),
+  bug: { updateMany: vi.fn(), findFirst: vi.fn(), findUnique: vi.fn() }, $queryRaw: vi.fn(), $transaction: vi.fn(),
 }));
 const mocks = vi.hoisted(() => ({ admin: vi.fn(), budget: vi.fn(), notifyLater: vi.fn(), workflow: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
@@ -21,7 +22,11 @@ vi.mock("@/lib/workflow", async (original) => ({
 vi.mock("@/lib/auth-helpers", () => ({ requireSuperAdmin: mocks.admin }));
 vi.mock("@/lib/agents/rate-budget", async (original) => ({ ...await original<typeof import("@/lib/agents/rate-budget")>(), consumeAgentBudget: mocks.budget }));
 vi.mock("@/lib/notify", () => ({ notifyLater: mocks.notifyLater }));
-import { releaseStaleClaims } from "@/lib/agent-api/availability";
+vi.mock("@/lib/cache-tags", async (original) => ({
+  ...await original<typeof import("@/lib/cache-tags")>(),
+  expireUnreadCounts: vi.fn(),
+}));
+import { releaseStaleClaims, sweepStaleClaims } from "@/lib/agent-api/availability";
 import { DEFAULT_PROJECT_WORKFLOW } from "@/lib/workflow-config";
 import { currentHold } from "@/lib/issue-holders";
 import { POST } from "@/app/api/v1/issues/[id]/heartbeat/route";
@@ -53,6 +58,10 @@ beforeEach(() => {
   db.membership.findMany.mockResolvedValue([]);
   db.bug.updateMany.mockResolvedValue({ count: 1 });
   db.bug.findFirst.mockResolvedValue({ id: "issue", projectId: "project", title: "Bug", reporterId: "reporter", assigneeId: null, status: "open", substatus: "open" });
+  db.bug.findUnique.mockResolvedValue(null);
+  db.issueWatch.findMany.mockResolvedValue([]);
+  db.notification.createMany.mockResolvedValue({ count: 0 });
+  db.user.findMany.mockResolvedValue([]);
   db.agentEvent.create.mockResolvedValue({ id: "evt" });
   db.webhookSubscription.findMany.mockResolvedValue([]);
   mocks.admin.mockResolvedValue({ id: "admin" });
@@ -86,6 +95,32 @@ describe("claim heartbeats", () => {
 });
 
 describe("stale claim release", () => {
+  it("runs the real reopen notification from the scheduled sweep without a request scope", async () => {
+    vi.useRealTimers();
+    db.issueClaim.findMany.mockImplementation(async ({ where }: { where: { waitingOnOwnerSince?: unknown } }) =>
+      where.waitingOnOwnerSince ? [] : [{ id: "claim", bugId: "issue", bug: { tenantId: "tenant", projectId: "project" } }],
+    );
+    db.issueClaim.findFirst.mockResolvedValue({
+      ...claim,
+      bug: { pullRequestUrl: null, project: { ownerWaitCapMinutes: null } },
+    });
+    db.bug.findFirst.mockResolvedValue({ title: "Bug", reporterId: "reporter" });
+    db.bug.findUnique.mockResolvedValue({
+      isDeleted: false,
+      tenantId: "tenant",
+      number: 123,
+      project: { slug: "demo", tenant: { slug: "demo" } },
+      assigneeId: null,
+    });
+    db.issueWatch.findMany.mockResolvedValue([{ userId: "watcher", watching: true }]);
+    db.notification.createMany.mockResolvedValue({ count: 1 });
+    const realNotify = await vi.importActual<typeof import("@/lib/notify")>("@/lib/notify");
+    mocks.notifyLater.mockImplementation((...events) => realNotify.notifyLater(...events));
+
+    await expect(sweepStaleClaims()).resolves.toEqual({ released: 1 });
+    await vi.waitFor(() => expect(db.notification.createMany).toHaveBeenCalled());
+  });
+
   it("releases a silent active claim and conditionally reopens its issue atomically with audit and event", async () => {
     expect(await releaseStaleClaims("project")).toEqual({ released: 1 });
     expect(db.issueClaim.update).toHaveBeenCalledWith({ where: { id: "claim" }, data: { status: "released", releasedAt: now, releaseReason: "silence" } });

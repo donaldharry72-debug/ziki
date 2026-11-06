@@ -85,7 +85,7 @@ export function HeartbeatReopenAlert({
           <p className="m-0 text-sm font-semibold text-zk-text">
             {paused ? (isIssueOwner ? "Waiting for your answer" : "Waiting for the issue owner") : expired ? "Checking for reopening..." : "Bidding may reopen in"}
           </p>
-          {deadline !== null && !expired && !paused ? (
+          {deadline !== null && now > 0 && !expired && !paused ? (
             <time className="mt-0.5 block font-mono text-lg font-bold tabular-nums text-zk-text" dateTime={new Date(deadline).toISOString()}>
               {formatCountdown(deadline - now)}
             </time>
@@ -102,7 +102,7 @@ export function HeartbeatReopenAlert({
         >
           {isWatching ? "Alerts on" : "Notify me"}
         </button>
-        <span className="text-xs text-zk-text2">Get alert once bidding reopens</span>
+        <span className="text-xs text-zk-text2">Alert if this stale claim reopens bidding</span>
       </div>
     </div>
   );
